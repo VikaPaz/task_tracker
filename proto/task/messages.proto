@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+option go_package = "./;task";
+
+package task;
+
+import "google/protobuf/timestamp.proto";
+
+
+message Task {
+    string id = 1; 
+    string title = 2;
+    string description = 3;
+    google.protobuf.Timestamp created = 4;
+    google.protobuf.Timestamp updated = 5; 
+    TaskStatus status = 6; 
+    string owner_id = 7; 
+}
+
+
+enum TaskStatus {
+    TASK_STATUS_UNSPECIFIED = 0; 
+    IN_PROGRESS = 1; 
+    DONE = 2; 
+}
+
+message TaskFilter {
+    repeated string id = 1;
+    string title = 2; 
+    string description = 3;
+    TaskStatus status = 4; 
+    string owner_id = 5;
+    TaskSort sort = 6; 
+    Range range = 7; 
+}
+
+message TaskSort {
+    string field = 1; 
+    string order = 2; 
+}
+
+
+message Range {
+    uint64 limit = 1;
+    uint64 offset = 2; 
+}

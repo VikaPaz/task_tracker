@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option go_package = "./;task";
+
+package task;
+
+import "proto/task/messages.proto";
+service TaskService {
+    rpc GetTasks (GetTasksRequest) returns (GetTasksResponse);
+
+    rpc UpdateTaskStatus (UpdateTaskStatusRequest) returns (UpdateTaskStatusResponse);
+}
+
+message GetTasksRequest {
+    TaskFilter filter = 1;
+}
+
+message GetTasksResponse {
+    repeated Task tasks = 1;
+}
+
+message UpdateTaskStatusRequest {
+    string task_id = 1;
+    TaskStatus new_status = 2; 
+}
+
+message UpdateTaskStatusResponse {
+    bool success = 1; 
+    string message = 2; 
+}
