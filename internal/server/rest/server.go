@@ -2,22 +2,25 @@ package rest
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/VikaPaz/task_tracker/internal/models"
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
 
 type TaskHandler struct {
-	router  *gin.Engine
-	service TaskServise
-	log     *zerolog.Logger
+	router   *gin.Engine
+	service  TaskServise
+	validate *validator.Validate
+	log      *zerolog.Logger
 }
 
 type TaskServise interface {
-	Create(ctx context.Context, title string, description string) (models.Task, error)
+	Create(ctx context.Context, task models.Task) (models.Task, error)
 	Get(ctx context.Context, id uuid.UUID) (models.Task, error)
 	Update(ctx context.Context, req models.Task) (models.Task, error)
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -26,19 +29,21 @@ type TaskServise interface {
 
 func NewTaskHandler(svc TaskServise, log *zerolog.Logger) *TaskHandler {
 	router := gin.Default()
+	validate := validator.New()
 	return &TaskHandler{
-		router:  router,
-		service: svc,
-		log:     log,
+		router:   router,
+		service:  svc,
+		validate: validate,
+		log:      log,
 	}
 }
 
 func (h *TaskHandler) registerRoutes() {
-	tasks := h.router.Group("/tasks")
+	tasks := h.router.Group("/task")
 	{
 		tasks.POST("/", h.CreateTask)
 		tasks.GET("/:id", h.GetTask)
-		tasks.PUT("/:id", h.UpdateTask)
+		tasks.PUT("/", h.UpdateTask)
 		tasks.DELETE("/:id", h.DeleteTask)
 		tasks.GET("/", h.ListTasks)
 	}
@@ -49,53 +54,103 @@ func Run(server *TaskHandler, serverPort string) {
 	server.router.Run(":" + serverPort)
 }
 
-func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var req struct {
-		Title       string `json:"title" binding:"required"`
-		Description string `json:"description"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	task, err := h.service.Create(c.Request.Context(), req.Title, req.Description)
+func (h *TaskHandler) Response(
+	c *gin.Context,
+	responseBody interface{},
+	status int,
+	err error,
+) {
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create task"})
+		responseBody = gin.H{"error": err.Error()}
+	}
+	h.logRequest(c, status, err)
+	c.JSON(status, responseBody)
+}
+
+func (h *TaskHandler) logRequest(c *gin.Context, status int, err error) {
+	logger := h.log.Info()
+
+	if err != nil {
+		logger = h.log.Error().Str("error", err.Error())
+	}
+
+	logger.
+		Str("method", c.Request.Method).
+		Str("url", c.Request.URL.String()).
+		Str("client_ip", c.ClientIP()).
+		Int("status", status)
+}
+
+// TODO: add auth
+func genOwner() string {
+	return uuid.New().String()
+}
+
+func (h *TaskHandler) CreateTask(c *gin.Context) {
+	var task models.Task
+
+	if err := c.ShouldBindJSON(&task); err != nil {
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
 		return
 	}
 
-	c.JSON(http.StatusCreated, task)
+	task.OwnerID = genOwner()
+
+	if task.Status == "" {
+		task.Status = models.InProgress
+	}
+
+	var err error
+	err = h.validate.Struct(task)
+	if err != nil {
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		return
+	}
+	h.log.Debug().Msg("validated new task")
+
+	task, err = h.service.Create(c.Request.Context(), task)
+	if err != nil {
+		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to create task: %w", err))
+		return
+	}
+	h.Response(c, gin.H{"task": task}, http.StatusCreated, nil)
 }
 
 func (h *TaskHandler) GetTask(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
 		return
 	}
 
 	task, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		h.Response(c, nil, http.StatusNotFound, fmt.Errorf("task not found"))
 		return
 	}
 
-	c.JSON(http.StatusOK, task)
+	h.Response(c, gin.H{"task": task}, http.StatusOK, nil)
 }
 
 func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	var task models.Task
+
 	if err := c.ShouldBindJSON(&task); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
 		return
 	}
+	task.OwnerID = genOwner()
+	_, err := uuid.Parse(task.ID)
+	if err != nil {
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
+		return
+	}
+	h.log.Debug().Msg("validated update task")
 
 	updatedTask, err := h.service.Update(c.Request.Context(), task)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update task"})
+		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to update task: %w", err))
 		return
 	}
 
@@ -106,24 +161,37 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid UUID"})
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
 		return
 	}
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete task"})
+		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to delete task: %w", err))
 		return
 	}
 
-	c.JSON(http.StatusNoContent, nil)
+	h.Response(c, nil, http.StatusNoContent, nil)
 }
 
 func (h *TaskHandler) ListTasks(c *gin.Context) {
-	tasks, err := h.service.List(c.Request.Context(), models.TaskFilter{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list tasks"})
+	var filter models.TaskFilter
+
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
 		return
 	}
 
-	c.JSON(http.StatusOK, tasks)
+	if err := h.validate.Struct(filter); err != nil {
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		return
+	}
+	h.log.Debug().Msg("validated a filter")
+
+	tasks, err := h.service.List(c.Request.Context(), filter)
+	if err != nil {
+		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to list tasks: %w", err))
+		return
+	}
+
+	h.Response(c, gin.H{"tasks": tasks}, http.StatusOK, nil)
 }
