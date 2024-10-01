@@ -10,16 +10,6 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// type Task struct {
-// 	ID          uuid.UUID `bun:",pk,type:uuid,default:uuid_generate_v4()"`
-// 	Title       string    `bun:",notnull"`
-// 	Description string
-// 	Created     time.Time `bun:",notnull,default:current_timestamp"`
-// 	Updated     time.Time `bun:",nullzero,default:current_timestamp"`
-// 	Status      string    `bun:",notnull" validate:"oneof=in_progress done"`
-// 	OwnerID     uuid.UUID `bun:",notnull" validate:"uuid4"`
-// }
-
 type Task struct {
 	ID          string `bun:"column:pk,type:uuid,default:uuid_generate_v4()"`
 	Title       string `bun:"column:notnull"`
@@ -84,11 +74,6 @@ func (r *TaskRepository) Get(ctx context.Context, id uuid.UUID) (models.Task, er
 
 func (r *TaskRepository) Update(ctx context.Context, req models.Task) (models.Task, error) {
 	repoTask := repoTask(req)
-	fmt.Println(repoTask)
-	// _, err := r.conn.NewUpdate().Model(&repoTask).Returning("*").Where("id = ?", repoTask.ID).Exec(ctx)
-	// if err != nil {
-	// 	r.log.Error().Err(err).Msg("Error updating a task.")
-	// }
 
 	res, err := r.conn.NewUpdate().
 		Model(&repoTask).
@@ -98,12 +83,12 @@ func (r *TaskRepository) Update(ctx context.Context, req models.Task) (models.Ta
 		Exec(ctx)
 
 	if err != nil {
-		return models.Task{}, err // Возвращаем ошибку, если запрос завершился с ошибкой
+		return models.Task{}, err
 	}
 
 	affected, err := res.RowsAffected()
 	if err != nil {
-		return models.Task{}, err // Возвращаем ошибку, если не удалось получить количество строк
+		return models.Task{}, err
 	}
 
 	if affected != 1 {
