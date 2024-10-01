@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/VikaPaz/task_tracker/internal/models"
@@ -9,87 +10,111 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// type Task struct {
+// 	ID          uuid.UUID `bun:",pk,type:uuid,default:uuid_generate_v4()"`
+// 	Title       string    `bun:",notnull"`
+// 	Description string
+// 	Created     time.Time `bun:",notnull,default:current_timestamp"`
+// 	Updated     time.Time `bun:",nullzero,default:current_timestamp"`
+// 	Status      string    `bun:",notnull" validate:"oneof=in_progress done"`
+// 	OwnerID     uuid.UUID `bun:",notnull" validate:"uuid4"`
+// }
+
 type Task struct {
-	ID          uuid.UUID `bun:",pk,type:uuid,default:uuid_generate_v4()"`
-	Title       string    `bun:",notnull"`
+	ID          string `bun:"column:pk,type:uuid,default:uuid_generate_v4()"`
+	Title       string `bun:"column:notnull"`
 	Description string
-	Created     time.Time `bun:",notnull,default:current_timestamp"`
-	Updated     time.Time `bun:",nullzero,default:current_timestamp"`
-	Status      string    `bun:",notnull" validate:"oneof=in_progress done"`
-	OwnerID     string    `bun:",notnull" validate:"uuid4"`
+	CreatedAt   time.Time `bun:"column:notnull,default:current_timestamp"`
+	UpdatedAt   time.Time `bun:"column:nullzero,default:current_timestamp"`
+	Status      string    `bun:"column:notnull"`
+	OwnerID     string    `bun:"column:notnull,type:uuid"`
 }
 
-func (r *TaskRepository) Create(ctx context.Context, title string, description string) (models.Task, error) {
-	task := Task{
-		Title:       title,
-		Description: description,
-		Created:     time.Now(),
-		Status:      "in_progress",
-	}
-	_, err := r.conn.NewInsert().Model(&task).Returning("*").Exec(ctx)
-	if err != nil {
-		r.log.Error().Err(err).Msg("Error creating a task")
-		return models.Task{}, err
-	}
-
+func modelsTask(task Task) models.Task {
 	res := models.Task{
-		ID:          task.ID.String(),
+		ID:          task.ID,
 		Title:       task.Title,
 		Description: task.Description,
-		Created:     task.Created,
-		Updated:     task.Updated,
-		Status:      task.Status,
+		Created:     task.CreatedAt,
+		Updated:     task.UpdatedAt,
+		Status:      models.TaskStatus(task.Status),
 		OwnerID:     task.OwnerID,
 	}
+	return res
+}
+
+func repoTask(task models.Task) Task {
+	res := Task{
+		ID:          task.ID,
+		Title:       task.Title,
+		Description: task.Description,
+		CreatedAt:   task.Created,
+		UpdatedAt:   task.Updated,
+		Status:      task.Status.String(),
+		OwnerID:     task.OwnerID,
+	}
+	return res
+}
+
+func (r *TaskRepository) Create(ctx context.Context, task models.Task) (models.Task, error) {
+	repoTask := repoTask(task)
+	_, err := r.conn.NewInsert().Model(&repoTask).Returning("*").Exec(ctx)
+	if err != nil {
+		r.log.Error().Err(err).Msgf("can't creating: %v", task)
+		return models.Task{}, err
+	}
+	r.log.Debug().Msgf("maked struct %v", task)
+
+	res := modelsTask(repoTask)
 	return res, nil
 }
 
-func (r *TaskRepository) Get(ctx context.Context, id int64) (models.Task, error) {
-	var task Task
-	err := r.conn.NewSelect().Model(&task).Where("id = ?", id).Scan(ctx)
+func (r *TaskRepository) Get(ctx context.Context, id uuid.UUID) (models.Task, error) {
+	var repoTask Task
+	err := r.conn.NewSelect().Model(&repoTask).Where("id = ?", id).Scan(ctx)
 	if err != nil {
-		r.log.Error().Err(err).Msg("Error receiving a task.")
+		r.log.Error().Err(err).Msgf("can't receiving: %v", repoTask)
 		return models.Task{}, err
 	}
+	r.log.Debug().Msgf("received struct %v", repoTask)
 
-	res := models.Task{
-		ID:          task.ID.String(),
-		Title:       task.Title,
-		Description: task.Description,
-		Created:     task.Created,
-		Updated:     task.Updated,
-		Status:      task.Status,
-		OwnerID:     task.OwnerID,
-	}
+	res := modelsTask(repoTask)
 	return res, nil
 }
 
 func (r *TaskRepository) Update(ctx context.Context, req models.Task) (models.Task, error) {
-	task := Task{
-		ID:          uuid.MustParse(req.ID),
-		Title:       req.Title,
-		Description: req.Description,
-		Updated:     time.Now(),
-		Status:      req.Status,
-	}
-	_, err := r.conn.NewUpdate().Model(req).Where("id = ?", task.ID.String()).Exec(ctx)
+	repoTask := repoTask(req)
+	fmt.Println(repoTask)
+	// _, err := r.conn.NewUpdate().Model(&repoTask).Returning("*").Where("id = ?", repoTask.ID).Exec(ctx)
+	// if err != nil {
+	// 	r.log.Error().Err(err).Msg("Error updating a task.")
+	// }
+
+	res, err := r.conn.NewUpdate().
+		Model(&repoTask).
+		Returning("*").
+		WherePK("id").
+		ExcludeColumn("created_at").
+		Exec(ctx)
+
 	if err != nil {
-		r.log.Error().Err(err).Msg("Error updating a task.")
+		return models.Task{}, err // Возвращаем ошибку, если запрос завершился с ошибкой
 	}
 
-	res := models.Task{
-		ID:          task.ID.String(),
-		Title:       task.Title,
-		Description: task.Description,
-		Created:     task.Created,
-		Updated:     task.Updated,
-		Status:      task.Status,
-		OwnerID:     task.OwnerID,
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return models.Task{}, err // Возвращаем ошибку, если не удалось получить количество строк
 	}
-	return res, nil
+
+	if affected != 1 {
+		return models.Task{}, fmt.Errorf("no rows were updated, task with id %v not found", repoTask.ID)
+	}
+	fmt.Println(repoTask)
+	resp := modelsTask(repoTask)
+	return resp, nil
 }
 
-func (r *TaskRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *TaskRepository) Delete(ctx context.Context, id string) error {
 	task := &Task{ID: id}
 	_, err := r.conn.NewDelete().Model(task).Where("id = ?", id).Exec(ctx)
 	if err != nil {
@@ -141,16 +166,7 @@ func (r *TaskRepository) List(ctx context.Context, filter models.TaskFilter) ([]
 
 	res := make([]models.Task, 0, len(tasks))
 	for _, val := range tasks {
-		res = append(res, models.Task{
-			ID:          val.ID.String(),
-			Title:       val.Title,
-			Description: val.Description,
-			Created:     val.Created,
-			Updated:     val.Updated,
-			Status:      val.Status,
-			OwnerID:     val.OwnerID,
-		},
-		)
+		res = append(res, modelsTask(val))
 	}
 	return res, nil
 }

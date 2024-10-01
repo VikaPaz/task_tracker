@@ -6,28 +6,26 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/driver/pgdriver"
 )
 
 type Config struct {
 	DSN string
 }
 
-func Connection(conf Config, logger zerolog.Logger) *bun.DB {
-	sqlDB, err := sql.Open("pgx", conf.DSN)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Error connecting to the database.")
-	}
-
+func Connection(conf Config, logger *zerolog.Logger) *bun.DB {
+	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(conf.DSN)))
 	db := bun.NewDB(sqlDB, pgdialect.New())
+	logger.Debug().Msgf("connection: %s", db)
 	return db
 }
 
 type TaskRepository struct {
 	conn *bun.DB
-	log  zerolog.Logger
+	log  *zerolog.Logger
 }
 
-func NewTaskRepository(conn *bun.DB, logger zerolog.Logger) *TaskRepository {
+func NewTaskRepository(conn *bun.DB, logger *zerolog.Logger) *TaskRepository {
 	return &TaskRepository{
 		conn: conn,
 		log:  logger,
