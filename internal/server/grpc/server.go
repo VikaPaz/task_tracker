@@ -118,20 +118,6 @@ func modelsTaskFilter(filter *pb.TaskFilter) models.TaskFilter {
 		OwnerID:     filter.OwnerId,
 	}
 
-	if filter.Sort != nil {
-		res.TaskSort = models.TaskSort{
-			Field: filter.Sort.Field,
-			Order: filter.Sort.Order,
-		}
-	}
-
-	if filter.Range != nil {
-		res.Range = models.Range{
-			Limit:  filter.Range.Limit,
-			Offset: filter.Range.Offset,
-		}
-	}
-
 	switch filter.Status {
 	case pb.TaskStatus_IN_PROGRESS:
 		res.Status = models.InProgress.String()

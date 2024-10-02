@@ -11,34 +11,20 @@ const (
 
 type Task struct {
 	ID          string `validate:"omitempty,uuid4"`
-	Title       string `validate:"required"`
+	Title       string
 	Description string
 	Created     time.Time
 	Updated     time.Time
-	Status      TaskStatus `validate:"oneof=in_progress done"`
+	Status      TaskStatus `validate:"omitempty,oneof=in_progress done"`
 	OwnerID     string     `validate:"uuid4"`
 }
 
 type TaskFilter struct {
-	ID          []string `validate:"omitempty,dive,uuid4"`
-	Title       string
-	Description string
-	Status      string `validate:"omitempty,oneof=in_progress done"`
-	OwnerID     string `validate:"omitempty,uuid4"`
-	// Created     time.Time // after
-	// Updated     time.Time // after
-	TaskSort TaskSort
-	Range    Range
-}
-
-type TaskSort struct {
-	Field string `validate:"omitempty,oneof=title description status created updated"`
-	Order string `validate:"omitempty,oneof=asc desc"`
-}
-
-type Range struct {
-	Limit  uint64
-	Offset uint64
+	ID          []string `form:"id" validate:"omitempty,dive,uuid4"`
+	Title       string   `form:"title"`
+	Description string   `form:"description"`
+	Status      string   `form:"status" validate:"omitempty,oneof=in_progress done"`
+	OwnerID     string   `form:"owner_id" validate:"omitempty,uuid4"`
 }
 
 type TaskUpdate struct {

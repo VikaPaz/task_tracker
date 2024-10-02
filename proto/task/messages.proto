@@ -30,17 +30,4 @@ message TaskFilter {
     string description = 3;
     TaskStatus status = 4; 
     string owner_id = 5;
-    TaskSort sort = 6; 
-    Range range = 7; 
-}
-
-message TaskSort {
-    string field = 1; 
-    string order = 2; 
-}
-
-
-message Range {
-    uint64 limit = 1;
-    uint64 offset = 2; 
 }

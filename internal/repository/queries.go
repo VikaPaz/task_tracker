@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
 	"time"
 
 	"github.com/VikaPaz/task_tracker/internal/models"
@@ -64,6 +64,9 @@ func (r *TaskRepository) Get(ctx context.Context, id uuid.UUID) (models.Task, er
 	err := r.conn.NewSelect().Model(&repoTask).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		r.log.Error().Err(err).Msgf("can't receiving: %v", repoTask)
+		if err == sql.ErrNoRows {
+			return models.Task{}, models.ErrTaskNotFound
+		}
 		return models.Task{}, err
 	}
 	r.log.Debug().Msgf("received struct %v", repoTask)
@@ -75,37 +78,65 @@ func (r *TaskRepository) Get(ctx context.Context, id uuid.UUID) (models.Task, er
 func (r *TaskRepository) Update(ctx context.Context, req models.Task) (models.Task, error) {
 	repoTask := repoTask(req)
 
-	res, err := r.conn.NewUpdate().
+	query := r.conn.NewUpdate().
 		Model(&repoTask).
-		Returning("*").
 		WherePK("id").
 		ExcludeColumn("created_at").
-		Exec(ctx)
+		Returning("*")
+
+	if repoTask.Title == "" {
+		query.ExcludeColumn("title")
+	}
+	if repoTask.Description == "" {
+		query.ExcludeColumn("description")
+	}
+	if repoTask.Status == "" {
+		query.ExcludeColumn("status")
+	}
+
+	res, err := query.Exec(ctx)
 
 	if err != nil {
+		r.log.Error().Err(err).Msgf("can't updating: %v", repoTask)
+		if err == sql.ErrNoRows {
+			return models.Task{}, models.ErrTaskNotFound
+		}
 		return models.Task{}, err
 	}
 
 	affected, err := res.RowsAffected()
 	if err != nil {
+		r.log.Error().Err(err).Msgf("can't update: %v", repoTask)
 		return models.Task{}, err
 	}
 
 	if affected != 1 {
-		return models.Task{}, fmt.Errorf("no rows were updated, task with id %v not found", repoTask.ID)
+		r.log.Error().Err(err).Msgf("can't update: %v", repoTask)
+		return models.Task{}, models.ErrTaskNotFound
 	}
-	fmt.Println(repoTask)
+
 	resp := modelsTask(repoTask)
 	return resp, nil
 }
 
 func (r *TaskRepository) Delete(ctx context.Context, id string) error {
 	task := &Task{ID: id}
-	_, err := r.conn.NewDelete().Model(task).Where("id = ?", id).Exec(ctx)
+	res, err := r.conn.NewDelete().Model(task).Where("id = ?", id).Exec(ctx)
 	if err != nil {
-		r.log.Error().Err(err).Msg("Error deleting a task.")
+		r.log.Error().Err(err).Msg("failed to delete a task.")
 	}
-	return err
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		r.log.Error().Err(err).Msgf("can't delete: %v", task)
+		return err
+	}
+	if affected != 1 {
+		r.log.Error().Err(err).Msgf("can't delete: %v", task)
+		return models.ErrTaskNotFound
+	}
+
+	return nil
 }
 
 func (r *TaskRepository) List(ctx context.Context, filter models.TaskFilter) ([]models.Task, error) {
@@ -131,21 +162,13 @@ func (r *TaskRepository) List(ctx context.Context, filter models.TaskFilter) ([]
 		query = query.Where("owner_id = ?", filter.OwnerID)
 	}
 
-	if filter.TaskSort.Field != "" && filter.TaskSort.Order != "" {
-		query = query.OrderExpr("? ?", bun.Ident(filter.TaskSort.Field), bun.Ident(filter.TaskSort.Order))
-	}
-
-	if filter.Range.Limit > 0 {
-		query = query.Limit(int(filter.Range.Limit))
-	}
-	if filter.Range.Offset > 0 {
-		query = query.Offset(int(filter.Range.Offset))
-	}
-
 	var tasks []Task
 	err := query.Scan(ctx, &tasks)
 	if err != nil {
-		r.log.Error().Err(err).Msg("Error listing tasks")
+		r.log.Error().Err(err).Msg("failed to list tasks")
+		if err == sql.ErrNoRows {
+			return []models.Task{}, models.ErrTaskNotFound
+		}
 		return nil, err
 	}
 

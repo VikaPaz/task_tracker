@@ -4,7 +4,8 @@ option go_package = "./;task";
 
 package task;
 
-import "proto/task/messages.proto";
+import "messages.proto";
+
 service TaskService {
     rpc GetTasks (GetTasksRequest) returns (GetTasksResponse);
 

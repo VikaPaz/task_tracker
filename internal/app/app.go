@@ -25,7 +25,8 @@ func Run() {
 		log.Fatal().Err(err).Msg("Error loading local/.env file")
 	}
 
-	serverPort := os.Getenv("SERVER_PORT")
+	restPort := os.Getenv("SERVER_PORT")
+	grpcPort := os.Getenv("GRPC_PORT")
 	dsn := os.Getenv("DATABASE_URL")
 
 	logger, err := NewLogger()
@@ -46,13 +47,13 @@ func Run() {
 	logger.Debug().Msg("migrations are applied successfully")
 
 	repo := repository.NewTaskRepository(db, logger)
-	logger.Debug().Msg("creaded repository")
+	logger.Debug().Msg("created  repository")
 
 	taskService := service.NewTaskService(repo, logger)
-	logger.Debug().Msg("creaded sercise")
+	logger.Debug().Msg("created  sercise")
 
-	taskServer := rest.NewTaskHandler(taskService, logger)
-	logger.Debug().Msg("creaded server")
+	restTaskServer := rest.NewTaskHandler(taskService, logger)
+	logger.Debug().Msg("created rest server")
 
 	go func() {
 		defer func() {
@@ -60,20 +61,22 @@ func Run() {
 				log.Fatal().Err(errors.New("panic recovered"))
 			}
 		}()
-		rest.Run(taskServer, serverPort)
+		rest.Run(restTaskServer, restPort)
 	}()
-	logger.Info().Msgf("rest server is running on port: %v", serverPort)
+	logger.Info().Msgf("rest server is running on port: %s", restPort)
 
-	// TODO: add gRPC config
+	grpcTaskServer := grpc.NewTaskHandler(taskService, logger)
+	logger.Debug().Msg("created grpc server")
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Fatal().Err(errors.New("panic recovered"))
 			}
 		}()
-		grpc.NewServer()
+
+		grpc.Run(grpcTaskServer, grpcPort)
 	}()
-	logger.Info().Msg("grpc server is running")
+	logger.Info().Msgf("grpc server is running on port: %s", grpcPort)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -83,8 +86,8 @@ func Run() {
 func NewLogger() (*zerolog.Logger, error) {
 	loggerLevel := os.Getenv("LOGGER_LEVEL")
 	path := os.Getenv("LOG_PATH")
-
-	logFile, err := os.OpenFile(path+"logfile.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// logfile.log
+	logFile, err := os.OpenFile(path+"logfile.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return nil, err
 	}

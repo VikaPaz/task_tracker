@@ -126,7 +126,11 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 
 	task, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
-		h.Response(c, nil, http.StatusNotFound, fmt.Errorf("task not found"))
+		status := http.StatusInternalServerError
+		if err == models.ErrTaskNotFound {
+			status = http.StatusNotFound
+		}
+		h.Response(c, nil, status, fmt.Errorf("failed to receive task: %w", err))
 		return
 	}
 
@@ -146,11 +150,21 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
 		return
 	}
+
+	err = h.validate.Struct(task)
+	if err != nil {
+		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		return
+	}
 	h.log.Debug().Msg("validated update task")
 
 	updatedTask, err := h.service.Update(c.Request.Context(), task)
 	if err != nil {
-		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to update task: %w", err))
+		status := http.StatusInternalServerError
+		if err == models.ErrTaskNotFound {
+			status = http.StatusNotFound
+		}
+		h.Response(c, nil, status, fmt.Errorf("failed to update task: %w", err))
 		return
 	}
 
@@ -166,7 +180,11 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	}
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
-		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to delete task: %w", err))
+		status := http.StatusInternalServerError
+		if err == models.ErrTaskNotFound {
+			status = http.StatusNotFound
+		}
+		h.Response(c, nil, status, fmt.Errorf("failed to delete task: %w", err))
 		return
 	}
 
@@ -176,7 +194,7 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 func (h *TaskHandler) ListTasks(c *gin.Context) {
 	var filter models.TaskFilter
 
-	if err := c.ShouldBindJSON(&filter); err != nil {
+	if err := c.ShouldBindQuery(&filter); err != nil {
 		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
 		return
 	}
@@ -187,9 +205,15 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 	}
 	h.log.Debug().Msg("validated a filter")
 
+	fmt.Println(filter)
+
 	tasks, err := h.service.List(c.Request.Context(), filter)
 	if err != nil {
-		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to list tasks: %w", err))
+		status := http.StatusInternalServerError
+		if err == models.ErrTaskNotFound {
+			status = http.StatusNotFound
+		}
+		h.Response(c, nil, status, fmt.Errorf("failed to list tasks: %w", err))
 		return
 	}
 

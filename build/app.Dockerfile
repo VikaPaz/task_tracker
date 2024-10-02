@@ -9,4 +9,5 @@ RUN go build -o main cmd/main.go
 
 FROM alpine:latest
 COPY --from=builder /app/main .
+COPY migrations migrations 
 CMD ["./main"]

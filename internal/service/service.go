@@ -32,11 +32,11 @@ func NewTaskService(repo Repo, log *zerolog.Logger) *TaskService {
 func (s *TaskService) Create(ctx context.Context, task models.Task) (models.Task, error) {
 	s.log.Debug().Msgf("Creating task: %v", task)
 
-	task.Created, task.Updated = time.Now(), time.Now()
+	task.Created, task.Updated = time.Now().UTC(), time.Now().UTC()
 
 	task, err := s.repo.Create(ctx, task)
 	if err != nil {
-		s.log.Error().Err(err).Msg("Error creating task")
+		s.log.Error().Err(err).Msg("failed to create task")
 		return models.Task{}, err
 	}
 	s.log.Debug().Msg("created new task")
