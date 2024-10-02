@@ -11,15 +11,17 @@ Task Tracker is a microservice for task management (to-do list? sic!) developed 
 # Usage
 
 ## make commands
-| command | description |
-|----------|----------|
-|run|                            run server in local machine|
-|build        |                  build and run app+DB in docker compose|
-|run_postgres  |                 run postgres in docker|
-|build_client  |                 build client|
-|client_done  |                  set status DONE of a task with given id. Need to add id=*needed id*|
-|client_list |                   get list of tasks using existion client|
-|help      |                     Display this help screen|
+| Command         | Description                                                              |
+|-----------------|--------------------------------------------------------------------------|
+| `proto`         | Generate Go code from proto files                                        |
+| `run`           | Run server on local machine                                              |
+| `docker_build`  | Build and run app + DB in Docker Compose                                 |
+| `run_postgres`  | Run PostgreSQL in Docker                                                 |
+| `docker_stop`   | Stop Docker Compose with app + DB                                        |
+| `build_client`  | Build client                                                             |
+| `client_done`   | Set status to DONE for a task with a given ID (use `id=*needed id*`)     |
+| `client_list`   | Get list of tasks using existing client                                  |
+| `help`          | Display this help screen                                                 |
 
 
 ## Swagger
