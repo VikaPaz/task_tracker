@@ -3,7 +3,10 @@ POSTGRES_USER ?= user
 POSTGRES_DB ?= tasks
 PROTO_PATH ?= proto/task
 
-.PHONY: build run run_postgres done build_client proto
+.PHONY: build run run_postgres done build_client proto swag
+
+swag: ## generate swagger
+	swag init -d cmd,internal/server,internal/models
 
 proto: ## generate go code from protofiles
 	protoc \

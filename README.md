@@ -22,9 +22,15 @@ Task Tracker is a microservice for task management (to-do list? sic!) developed 
 | `client_done`   | Set status to DONE for a task with a given ID (use `id=*needed id*`)     |
 | `client_list`   | Get list of tasks using existing client                                  |
 | `help`          | Display this help screen                                                 |
+| `swag`          | Generate swagger                                                         |
 
 
 ## Swagger
+http://{host}:{port}/swagger/index.html
+
+Default URL: http://localhost:8900/swagger/index.html
+
+All files are stored in [docs](docs)
 
 ## Proto
 All files are stored in [proto/task](proto/task)

@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
+	_ "github.com/VikaPaz/task_tracker/docs"
 	"github.com/VikaPaz/task_tracker/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type TaskHandler struct {
@@ -47,6 +51,7 @@ func (h *TaskHandler) registerRoutes() {
 		tasks.DELETE("/:id", h.DeleteTask)
 		tasks.GET("/", h.ListTasks)
 	}
+	h.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 }
 
 func Run(server *TaskHandler, serverPort string) {
@@ -86,13 +91,35 @@ func genOwner() string {
 	return uuid.New().String()
 }
 
-func (h *TaskHandler) CreateTask(c *gin.Context) {
-	var task models.Task
+type CreateRequest struct {
+	ID          string `swaggerignore:"true" validate:"omitempty,uuid4"`
+	Title       string
+	Description string
+	Created     time.Time         `swaggerignore:"true"`
+	Updated     time.Time         `swaggerignore:"true"`
+	Status      models.TaskStatus `validate:"omitempty,oneof=in_progress done"`
+	OwnerID     string            `swaggerignore:"true" validate:"uuid4"`
+}
 
-	if err := c.ShouldBindJSON(&task); err != nil {
+// @Summary Creating a new task
+// @Description Handles request to create a new task and returns the task information in JSON.
+// @Tags task
+// @Accept json
+// @Produce json
+// @Param request body CreateRequest true "New task"
+// @Success 201 {object} models.Task "Created task"
+// @Failure 400
+// @Failure 500
+// @Router /task/ [post]
+func (h *TaskHandler) CreateTask(c *gin.Context) {
+	var req CreateRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
 		return
 	}
+
+	task := models.Task(req)
 
 	task.OwnerID = genOwner()
 
@@ -116,6 +143,16 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	h.Response(c, gin.H{"task": task}, http.StatusCreated, nil)
 }
 
+// @Summary Receiving a task
+// @Description Handles request to get a task and returns the task information in JSON.
+// @Tags task
+// @Produce json
+// @Param id path string false "Task ID"
+// @Success 200 {object} models.Task "task"
+// @Failure 400
+// @Failure 404
+// @Failure 500
+// @Router /task/{id} [get]
 func (h *TaskHandler) GetTask(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -137,13 +174,37 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 	h.Response(c, gin.H{"task": task}, http.StatusOK, nil)
 }
 
-func (h *TaskHandler) UpdateTask(c *gin.Context) {
-	var task models.Task
+type UpdateRequest struct {
+	ID          string `validate:"omitempty,uuid4"`
+	Title       string
+	Description string
+	Created     time.Time         `swaggerignore:"true"`
+	Updated     time.Time         `swaggerignore:"true"`
+	Status      models.TaskStatus `validate:"omitempty,oneof=in_progress done"`
+	OwnerID     string            `validate:"uuid4"`
+}
 
-	if err := c.ShouldBindJSON(&task); err != nil {
+// @Summary Updating a task
+// @Description Handles request to update a task and returns the task information in JSON.
+// @Tags task
+// @Accept json
+// @Produce json
+// @Param request body UpdateRequest true "fields"
+// @Success 200 {object} models.Task "Updated task"
+// @Failure 400
+// @Failure 404
+// @Failure 500
+// @Router /task/ [put]
+func (h *TaskHandler) UpdateTask(c *gin.Context) {
+	var req UpdateRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
 		return
 	}
+
+	task := models.Task(req)
+
 	task.OwnerID = genOwner()
 	_, err := uuid.Parse(task.ID)
 	if err != nil {
@@ -171,6 +232,15 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedTask)
 }
 
+// @Summary Deleting a task
+// @Description Handles request to delete a task.
+// @Tags task
+// @Param id path string false "Task ID"
+// @Success 204
+// @Failure 400
+// @Failure 404
+// @Failure 500
+// @Router /task/{id} [delete]
 func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -191,6 +261,20 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	h.Response(c, nil, http.StatusNoContent, nil)
 }
 
+// @Summary Listing a task
+// @Description Handles request to get tasks and returns the list of tasks information in JSON.
+// @Tags task
+// @Produce json
+// @Param id query string false "Task ID"
+// @Param title query string false "Title"
+// @Param description query string false "Description"
+// @Param status query string false "Status"
+// @Param owner_id query string false "Owner ID"
+// @Success 200 {object} models.Task "task"
+// @Failure 400
+// @Failure 404
+// @Failure 500
+// @Router /task/ [get]
 func (h *TaskHandler) ListTasks(c *gin.Context) {
 	var filter models.TaskFilter
 
@@ -204,8 +288,6 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 		return
 	}
 	h.log.Debug().Msg("validated a filter")
-
-	fmt.Println(filter)
 
 	tasks, err := h.service.List(c.Request.Context(), filter)
 	if err != nil {

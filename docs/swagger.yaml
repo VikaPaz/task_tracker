@@ -1,0 +1,205 @@
+definitions:
+  models.Task:
+    properties:
+      created:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      ownerID:
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/models.TaskStatus'
+        enum:
+        - in_progress
+        - done
+      title:
+        type: string
+      updated:
+        type: string
+    type: object
+  models.TaskStatus:
+    enum:
+    - in_progress
+    - done
+    type: string
+    x-enum-varnames:
+    - InProgress
+    - Done
+  rest.CreateRequest:
+    properties:
+      description:
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/models.TaskStatus'
+        enum:
+        - in_progress
+        - done
+      title:
+        type: string
+    type: object
+  rest.UpdateRequest:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      ownerID:
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/models.TaskStatus'
+        enum:
+        - in_progress
+        - done
+      title:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: 'This is task_tracker server: https://github.com/VikaPaz/task_tracker.'
+  title: Task Tracker API
+paths:
+  /task/:
+    get:
+      description: Handles request to get tasks and returns the list of tasks information
+        in JSON.
+      parameters:
+      - description: Task ID
+        in: query
+        name: id
+        type: string
+      - description: Title
+        in: query
+        name: title
+        type: string
+      - description: Description
+        in: query
+        name: description
+        type: string
+      - description: Status
+        in: query
+        name: status
+        type: string
+      - description: Owner ID
+        in: query
+        name: owner_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: task
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Listing a task
+      tags:
+      - task
+    post:
+      consumes:
+      - application/json
+      description: Handles request to create a new task and returns the task information
+        in JSON.
+      parameters:
+      - description: New task
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/rest.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created task
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: Creating a new task
+      tags:
+      - task
+    put:
+      consumes:
+      - application/json
+      description: Handles request to update a task and returns the task information
+        in JSON.
+      parameters:
+      - description: fields
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/rest.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated task
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Updating a task
+      tags:
+      - task
+  /task/{id}:
+    delete:
+      description: Handles request to delete a task.
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Deleting a task
+      tags:
+      - task
+    get:
+      description: Handles request to get a task and returns the task information
+        in JSON.
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: task
+          schema:
+            $ref: '#/definitions/models.Task'
+        "400":
+          description: Bad Request
+        "404":
+          description: Not Found
+        "500":
+          description: Internal Server Error
+      summary: Receiving a task
+      tags:
+      - task
+swagger: "2.0"
