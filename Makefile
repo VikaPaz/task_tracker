@@ -3,7 +3,7 @@ POSTGRES_USER ?= user
 POSTGRES_DB ?= tasks
 PROTO_PATH ?= proto/task
 
-.PHONY: build run run_postgres done build_client proto swag
+.PHONY: docker_build docker_stop run_postgres build_client client_list client_done proto swag
 
 swag: ## generate swagger
 	swag init -d cmd,internal/server,internal/models
