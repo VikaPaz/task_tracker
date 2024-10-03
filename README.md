@@ -26,9 +26,13 @@ Task Tracker is a microservice for task management (to-do list? sic!) developed 
 
 
 ## Swagger
-http://{host}:{port}/swagger/index.html
+`http://{host}:{port}/swagger/index.html`
 
-Default URL: http://localhost:8900/swagger/index.html
+### Default URL: 
+
+**http://localhost:8900/swagger/index.html**
+
+(need to run `make docker_build` first)
 
 All files are stored in [docs](docs)
 
