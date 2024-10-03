@@ -49,7 +49,7 @@ service TaskService {
 
 # TODO 
 
-- [ ] swagger for http router 
+- [x] swagger for http router 
 - [ ] unit tests
 - [ ] add auth
 - [ ] add middleware to parse token with owner_id
