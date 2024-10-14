@@ -54,12 +54,13 @@ func (h *TaskHandler) registerRoutes() {
 	h.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 }
 
-func Run(server *TaskHandler, serverPort string) {
+func RunTaskServ(server *TaskHandler, serverPort string) {
 	server.registerRoutes()
 	server.router.Run(":" + serverPort)
 }
 
-func (h *TaskHandler) Response(
+func Response(
+	l *zerolog.Logger,
 	c *gin.Context,
 	responseBody interface{},
 	status int,
@@ -68,15 +69,15 @@ func (h *TaskHandler) Response(
 	if err != nil {
 		responseBody = gin.H{"error": err.Error()}
 	}
-	h.logRequest(c, status, err)
+	logRequest(l, c, status, err)
 	c.JSON(status, responseBody)
 }
 
-func (h *TaskHandler) logRequest(c *gin.Context, status int, err error) {
-	logger := h.log.Info()
+func logRequest(l *zerolog.Logger, c *gin.Context, status int, err error) {
+	logger := l.Info()
 
 	if err != nil {
-		logger = h.log.Error().Str("error", err.Error())
+		logger = l.Error().Str("error", err.Error())
 	}
 
 	logger.
@@ -115,7 +116,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var req CreateRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
 		return
 	}
 
@@ -130,17 +131,17 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var err error
 	err = h.validate.Struct(task)
 	if err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
 		return
 	}
 	h.log.Debug().Msg("validated new task")
 
 	task, err = h.service.Create(c.Request.Context(), task)
 	if err != nil {
-		h.Response(c, nil, http.StatusInternalServerError, fmt.Errorf("failed to create task: %w", err))
+		Response(h.log, c, nil, http.StatusInternalServerError, fmt.Errorf("failed to create task: %w", err))
 		return
 	}
-	h.Response(c, gin.H{"task": task}, http.StatusCreated, nil)
+	Response(h.log, c, gin.H{"task": task}, http.StatusCreated, nil)
 }
 
 // @Summary Receiving a task
@@ -157,7 +158,7 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
 		return
 	}
 
@@ -167,11 +168,11 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 		if err == models.ErrTaskNotFound {
 			status = http.StatusNotFound
 		}
-		h.Response(c, nil, status, fmt.Errorf("failed to receive task: %w", err))
+		Response(h.log, c, nil, status, fmt.Errorf("failed to receive task: %w", err))
 		return
 	}
 
-	h.Response(c, gin.H{"task": task}, http.StatusOK, nil)
+	Response(h.log, c, gin.H{"task": task}, http.StatusOK, nil)
 }
 
 type UpdateRequest struct {
@@ -199,7 +200,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	var req UpdateRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
 		return
 	}
 
@@ -208,13 +209,13 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 	task.OwnerID = genOwner()
 	_, err := uuid.Parse(task.ID)
 	if err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
 		return
 	}
 
 	err = h.validate.Struct(task)
 	if err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
 		return
 	}
 	h.log.Debug().Msg("validated update task")
@@ -225,7 +226,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		if err == models.ErrTaskNotFound {
 			status = http.StatusNotFound
 		}
-		h.Response(c, nil, status, fmt.Errorf("failed to update task: %w", err))
+		Response(h.log, c, nil, status, fmt.Errorf("failed to update task: %w", err))
 		return
 	}
 
@@ -245,7 +246,7 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("invalid UUID: %w", err))
 		return
 	}
 
@@ -254,11 +255,11 @@ func (h *TaskHandler) DeleteTask(c *gin.Context) {
 		if err == models.ErrTaskNotFound {
 			status = http.StatusNotFound
 		}
-		h.Response(c, nil, status, fmt.Errorf("failed to delete task: %w", err))
+		Response(h.log, c, nil, status, fmt.Errorf("failed to delete task: %w", err))
 		return
 	}
 
-	h.Response(c, nil, http.StatusNoContent, nil)
+	Response(h.log, c, nil, http.StatusNoContent, nil)
 }
 
 // @Summary Listing a task
@@ -279,12 +280,12 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 	var filter models.TaskFilter
 
 	if err := c.ShouldBindQuery(&filter); err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("error: %w", err))
 		return
 	}
 
 	if err := h.validate.Struct(filter); err != nil {
-		h.Response(c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
+		Response(h.log, c, nil, http.StatusBadRequest, fmt.Errorf("failed to bind request JSON: %w", err))
 		return
 	}
 	h.log.Debug().Msg("validated a filter")
@@ -295,9 +296,9 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 		if err == models.ErrTaskNotFound {
 			status = http.StatusNotFound
 		}
-		h.Response(c, nil, status, fmt.Errorf("failed to list tasks: %w", err))
+		Response(h.log, c, nil, status, fmt.Errorf("failed to list tasks: %w", err))
 		return
 	}
 
-	h.Response(c, gin.H{"tasks": tasks}, http.StatusOK, nil)
+	Response(h.log, c, gin.H{"tasks": tasks}, http.StatusOK, nil)
 }

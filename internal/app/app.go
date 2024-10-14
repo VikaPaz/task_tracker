@@ -25,6 +25,7 @@ func Run() {
 		log.Fatal().Err(err).Msg("Error loading local/.env file")
 	}
 
+	authPort := os.Getenv("AUTH_PORT")
 	restPort := os.Getenv("SERVER_PORT")
 	grpcPort := os.Getenv("GRPC_PORT")
 	dsn := os.Getenv("DATABASE_URL")
@@ -49,10 +50,19 @@ func Run() {
 	repo := repository.NewTaskRepository(db, logger)
 	logger.Debug().Msg("created  repository")
 
+	authRepo := repository.NewAuthRepository(db, logger)
+	logger.Debug().Msg("created Auth repository")
+
 	taskService := service.NewTaskService(repo, logger)
 	logger.Debug().Msg("created  sercise")
 
+	authService := service.NewAuthService(authRepo, logger)
+	logger.Debug().Msg("created  sercise")
+
 	restTaskServer := rest.NewTaskHandler(taskService, logger)
+	logger.Debug().Msg("created rest server")
+
+	restAuthServer := rest.NewAuthHandler(authService, logger)
 	logger.Debug().Msg("created rest server")
 
 	go func() {
@@ -61,7 +71,17 @@ func Run() {
 				log.Fatal().Err(errors.New("panic recovered"))
 			}
 		}()
-		rest.Run(restTaskServer, restPort)
+		rest.RunTaskServ(restTaskServer, restPort)
+	}()
+	logger.Info().Msgf("rest server is running on port: %s", restPort)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Fatal().Err(errors.New("panic recovered"))
+			}
+		}()
+		rest.RunAuthServ(restAuthServer, authPort)
 	}()
 	logger.Info().Msgf("rest server is running on port: %s", restPort)
 
